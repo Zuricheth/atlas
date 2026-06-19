@@ -76,13 +76,7 @@ cd atlas-frontend && npm install && npm run dev
 
 详见 [docs/ARCHITECTURE.md#快速开始](docs/ARCHITECTURE.md)。
 
-## 🎯 这个项目能展示什么(简历视角)
 
-- **全栈工程能力**:从数据库设计、REST+SSE API、JWT 鉴权,到 Vue 前端、主题系统、流式渲染,一个人贯通
-- **RAG 系统设计**:不是调 API,是自己实现了 embedding 缓存、hybrid 检索融合、向量库双轨(MySQL 内存余弦 + Qdrant)、故障降级
-- **工程化纪律**:Flyway 迁移、事务边界、事务后异步 dispatch、文件落盘回滚、分页避免 OOM
-- **产品 + 设计**:5 套有设计哲学的主题(含浪漫主义 SVG 艺术层)、自研 UI Kit、KaTeX 数学公式、可交互的认知地图
-- **可讲解性**:每个模块都有文档,能说清"为什么这么设计"
 
 ## 📄 License
 
