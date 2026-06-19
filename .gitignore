@@ -7,6 +7,8 @@ config.env
 # Runtime data and build output
 .tools/
 .claude/
+.config.json
+.snow/
 atlas-backend/data/
 atlas-backend/target/
 atlas-frontend/node_modules/
@@ -23,6 +25,11 @@ Thumbs.db
 
 # Logs
 *.log
+atlas-backend.log
+atlas-frontend.log
+atlas-start.log
+atlas-stop.log
+sync.log
 
 # Temp workspaces — paperreader retry/draft scraps not part of the project
 paperreader-*/
@@ -33,10 +40,19 @@ temp-*/
 
 # Standalone HTML that is not part of Atlas
 ai-image-studio.html
-sunshine-installer.exe
 
-# Generated run scripts (user local)
-start-hidden.ps1
-start-hidden.vbs
-stop-hidden.vbs
-*hidden-run.cmd
+# Agent restor
+agent-creator/
+ai-image-studio-node/
+
+# Workspace station (multi-machine dev environment)
+workspace-station/
+
+# Misc standalone files no
+schema.sql
+vcp-render-test.html
+tmp.txt
+*.css
+*.js
+ATLAS_EXTERNAL_INBOX_README.md
+"\346\226\260\345\273\272\346\226\207\346\234\254\346\226\207\346\241\243.txt"
