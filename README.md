@@ -87,3 +87,14 @@ cd atlas-frontend && npm install && npm run dev
 ## 📄 License
 
 MIT
+
+---
+> **Warning**: This is the public read-only mirror of Atlas.  
+> The private repository contains the full history with development configurations.
+> Sensitive credentials, API keys, and personal configuration files have been replaced with placeholders in this branch.
+> See `config.env.example` for the configuration template.
+---
+> **Warning**: This is the public read-only mirror of Atlas.  
+> The private repository at  contains the full history with development configurations.
+> Sensitive credentials, API keys, and personal configuration files have been replaced with placeholders in this branch.
+> See  for the configuration template.

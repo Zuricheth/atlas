@@ -1,0 +1,1 @@
+function s(e,o){var n;try{const r=JSON.parse(e);if((n=r==null?void 0:r.error)!=null&&n.message){const c=r.error.code?` (${r.error.code})`:"";return new Error(`API ${o}: ${r.error.message}${c}`)}}catch{}return new Error(`API ${o}: ${e||"Unknown error"}`)}export{s as p};

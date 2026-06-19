@@ -1,0 +1,446 @@
+让我先看看您现有的 novel-workflow-refactor 的完整结构，确保上游工具的技术栈和对接方式完全兼容。
+好，现在我对下游工具的完整结构了如指掌了。让我基于这些信息设计上游工具的精确架构。
+Novel Planner
+Codex 技术规格书 · 完整架构
+
+一、项目定义做什么一个浏览器单页应用，引导用户从 Idea 走到可以直接喂给 novel-workflow-refactor 的章节细化 TXT。中间产出的所有资产（角色卡、世界观、总纲、卷纲）可管理、可编辑、可导出。
+不做什么不做写骨、润色、质检——那是下游 novel-workflow-refactor 的事。不做 RAG/记忆系统——那是 VCP Agent 的事。本工具只负责"规划"和"资产管理"。
+技术约束· 纯浏览器，无 Node 后端，无构建工具，无 npm· 所有 JS 通过 <script> 标签顺序加载，全局作用域，和下游工具技术栈一致· 共享下游的 API 网关 localhost:6005，OpenAI 兼容格式· localStorage 持久化，key 前缀 nvpl_（区分下游的 novel.workflow.）· 视觉风格复用下游的 CSS 变量体系（--bg, --panel, --accent 等）
+对接方式最终输出一份 UTF-8 TXT → 用户复制/下载 → 粘贴到 novel-workflow-refactor 的"多章节细化文本"框 → 点"拆分章节任务" → 跑三阶段流水线。
+省钱设计每步一次 API 调用。不做多轮对话。AI 直接出完整结果，用户在本地编辑器中改，改完确认进下一步。
+
+二、文件结构
+novel-planner/
+├── index.html              # 单页应用
+├── styles.css              # 样式（复用下游 CSS 变量体系）
+├── js/
+│   ├── 00-state.js         # 全局状态、默认配置、DOM 映射
+│   ├── 10-prompts.js       # 每步的 system prompt 模板
+│   ├── 20-api.js           # API 调用（SSE 流式 + 非流式）
+│   ├── 30-wizard.js        # 步骤向导核心逻辑
+│   ├── 40-assets.js        # 资产 CRUD + 资产面板
+│   ├── 50-export.js        # TXT 导出 + 格式验证
+│   ├── 60-events.js        # 所有 UI 事件绑定
+│   └── 70-bootstrap.js     # 启动、状态恢复、首次渲染
+└── README.md
+
+三、数据模型
+// ========== localStorage keys ==========
+const NVPL_CONFIG  = "nvpl_config";
+const NVPL_PROJECT = "nvpl_project";
+const NVPL_INDEX   = "nvpl_projects_index";// ========== 全局运行时状态 ==========const NP = {  config: {    apiUrl:       "http://localhost:6005/v1/chat/completions",    apiKey:       "Vcp_Secret_9x8d7f6a5s4d",    model:        "gpt-5.5",    temperature:  0.7,    maxTokens:    16000,    enableStream: true,  },
+  project: {    id:          "",        // crypto.randomUUID()    name:        "",        // 书名    createdAt:   "",    updatedAt:   "",    currentStep: 0,         // 0-7  },
+  // ========== 步骤产物 ==========  idea:           "",       // Step 0: 原始想法  topicSheet:     "",       // Step 1: 选题定盘书  characters:     [],       // Step 2: [{id, name, role, content}]  worldBuilding:  "",       // Step 3: 世界观+体系+势力  masterOutline:  "",       // Step 4: 母总纲  volumeOutlines: {},       // Step 5: {"1":{name,content}, "2":{...}}  chapterDetails: {},       // Step 6: {"1":{batches:[], merged:""}}
+  // ========== UI 运行时 ==========  generating:     false,  streamBuffer:   "",  activeAbort:    null,     // AbortController};
+// characters 数组中每个元素的结构function makeCharacter(name, role, content) {  return {    id:      crypto.randomUUID(),    name:    name || "",    role:    role || "heroine",  // "protagonist"|"heroine"|"antagonist"|"supporting"    content: content || "",  };}
+// volumeOutlines 中每卷的结构function makeVolumeOutline(number, name, content) {  return { number, name: name || 卷${number}, content: content || "" };}
+// chapterDetails 中每卷的结构function makeChapterDetailEntry() {  return { batches: [], merged: "" };}
+
+持久化策略：
+· nvpl_config → NP.config 的 JSON
+· nvpl_project → 包含 project 元数据 + 所有步骤产物的完整 JSON
+· nvpl_projects_index → [{id, name, updatedAt}] 数组，支持多项目切换
+· saveState() 在每次 confirmStep / saveAsset 时调用
+· loadState() 在 bootstrap 时调用
+
+四、步骤向导详细设计
+每步的 UI 模式完全一致：
+上方 = 步骤导航条（横向，显示所有步骤名称和状态图标）
+左侧 = 上下文面板（只读，显示前序步骤的产物摘要，折叠式）
+中间 = 编辑器（大 textarea，AI 生成结果填入，用户可自由编辑）
+下方 = 操作栏（生成/重新生成/确认/保存草稿）+ 流式输出预览区
+
+步骤常量定义（00-state.js）：
+
+const STEPS = [
+  { id: 0, key: "idea",           name: "想法",     icon: "💡", needsApi: false },
+  { id: 1, key: "topicSheet",     name: "选题定盘", icon: "🎯", needsApi: true,  prompt: "topicSheet"     },
+  { id: 2, key: "characters",     name: "角色设计", icon: "👤", needsApi: true,  prompt: "characterCard", multi: true },
+  { id: 3, key: "worldBuilding",  name: "世界构建", icon: "🌍", needsApi: true,  prompt: "worldBuilding"  },
+  { id: 4, key: "masterOutline",  name: "母总纲",   icon: "📖", needsApi: true,  prompt: "masterOutline"  },
+  { id: 5, key: "volumeOutlines", name: "卷总纲",   icon: "📕", needsApi: true,  prompt: "volumeOutline", perVolume: true },
+  { id: 6, key: "chapterDetails", name: "章节细化", icon: "📝", needsApi: true,  prompt: "chapterDetail", perVolume: true, batched: true },
+  { id: 7, key: "export",         name: "导出",     icon: "📦", needsApi: false },
+];
+
+Step 0 · 想法
+
+UI：一个大 textarea，placeholder "你的故事想法——可以是一句话，也可以是几段话"。
+API：无。
+确认：存入 NP.idea → saveState → goToStep(1)。
+左侧上下文：无。
+
+Step 1 · 选题定盘
+
+API：1 次调用。
+system：PROMPTS.topicSheet（{{定盘}} 的内容）
+user：`我的故事想法：\n\n${NP.idea}\n\n请直接输出完整选题定盘书。`
+左侧上下文：显示 NP.idea（只读）。
+确认：存入 NP.topicSheet → saveState → goToStep(2)。
+
+Step 2 · 角色设计（多轮）
+
+UI 特殊：编辑器上方有角色列表（已确认的角色卡片）+ "添加角色"按钮。
+点"添加角色"弹出小表单：角色定位（下拉：主角/女主/反派/配角）、角色名（可选）、一句话描述（可选）。填完点"生成"触发 API 调用。
+每个角色 1 次调用。
+system：PROMPTS.characterCard（{{铸相}} 的内容）
+user：
+
+选题定盘书：
+${NP.topicSheet}已有角色：\({NP.characters.map(c => `·\){c.name}（${c.role}）`).join("\n") || "暂无"}
+请为以下角色生成完整资产卡：角色定位：${role}角色名：${name || "请你起名"}补充描述：${desc || "无"}
+
+左侧上下文：显示选题定盘书摘要 + 已确认角色名列表。
+确认单个角色：push 到 NP.characters → saveState → 编辑器清空，可继续添加。
+完成角色设计：点"角色设计完成" → goToStep(3)。
+已确认角色可编辑：点角色卡片 → 内容加载到编辑器 → 修改后点"更新角色"。
+已确认角色可删除：角色卡片上有删除按钮。
+
+Step 3 · 世界构建
+
+API：1 次调用。世界观+修炼体系+势力合并出。
+system：PROMPTS.worldBuilding（{{造域}} 的内容）
+user：
+
+选题定盘书：
+${NP.topicSheet}已确认角色：\({NP.characters.map(c => `【\){c.name}·\({c.role}】\n\){extractSummary(c.content)}`).join("\n\n")}
+请直接输出完整世界观设定文档。
+
+extractSummary(content)：从角色资产卡中提取 姓名+身份锚点+能力起点+关系网，不发送全文（省 token）。
+左侧上下文：选题定盘摘要 + 角色名列表。
+确认：存入 NP.worldBuilding → saveState → goToStep(4)。
+
+Step 4 · 母总纲
+
+API：1 次调用。输入最重——需要选题+角色全文+世界观全文。
+system：PROMPTS.masterOutline（{{纲目}} 的内容，指令前缀"【指令：母总纲】"）
+user：
+
+【指令：母总纲】===选题定盘书===${NP.topicSheet}
+===角色资产===${NP.characters.map(c => c.content).join("\n\n---\n\n")}
+===世界观设定===${NP.worldBuilding}
+请直接输出完整母总纲。
+
+左侧上下文：选题定盘摘要 + 角色名列表 + 世界观骨架摘要。
+确认：存入 NP.masterOutline → 自动解析卷数和卷名，初始化 NP.volumeOutlines → saveState → goToStep(5)。
+自动解析逻辑（30-wizard.js 中的 parseVolumesFromMaster）：
+从母总纲文本中用正则匹配 /卷[一二三四五六七八九十\d]+[：:·\s]+.*/g 提取卷号和卷名，初始化 volumeOutlines 对象。
+
+Step 5 · 卷总纲（逐卷）
+
+UI 特殊：编辑器上方有卷列表下拉框（从 Step 4 解析出的卷列表）。选中某卷后显示该卷的编辑器。
+每卷 1 次调用。
+system：PROMPTS.volumeOutline（{{纲目}} 的内容，指令前缀"【指令：卷总纲】"）
+user：
+
+【指令：卷总纲】===母总纲===${NP.masterOutline}
+===本卷相关角色===${filterCharactersForVolume(volumeNumber)}
+===世界观设定===${NP.worldBuilding}
+\({prevVolumeEndState ? `===前一卷卷末状态===\n\){prevVolumeEndState}` : ""}
+请展开卷${volumeNumber}的完整卷总纲。
+
+filterCharactersForVolume：从母总纲的"角色出场时间表"中判断哪些角色在本卷出场，只发送这些角色的资产卡。如果判断不了就发全部。
+prevVolumeEndState：如果前一卷的卷纲已确认，从中提取"七、卷末状态"部分。
+左侧上下文：母总纲中本卷的一句话定位 + 本卷相关角色名列表。
+确认：存入 NP.volumeOutlines[volumeNumber] → saveState。可以继续选下一卷生成，也可以进入 Step 6。
+进入 Step 6 的条件：至少有一卷的卷纲已确认。
+
+Step 6 · 章节细化（逐卷·分批）
+
+UI 特殊：
+· 上方：卷选择下拉框 + 阶段选择下拉框（从卷纲中解析出的阶段列表）
+· 编辑器：显示当前批次的生成结果
+· 编辑器下方：已合并的全部批次预览（只读 textarea，随每批确认自动追加）
+· 操作栏：生成当前阶段 / 确认当前批次 / 生成下一阶段 / 导出本卷 TXT每个阶段 1 次调用。一卷如果有 5 个阶段就是 5 次调用。system：PROMPTS.chapterDetail（{{纲目}} 的内容，指令前缀"【指令：章节细化】"）user：
+
+【指令：章节细化】===卷总纲===${NP.volumeOutlines[vol].content}
+===本卷相关角色===${filterCharactersForVolume(vol)}
+===世界观设定===${NP.worldBuilding}
+\({lastBatchTail ? `===上一阶段末尾章节===\n\){lastBatchTail}\n\n上一阶段最后一章的结尾句是："${lastEndingSentence}"，本阶段第一章开头必须自然衔接。` : ""}
+请细化阶段stageNum（{stageNum}（stageNum（{stageName}）的所有章节。本阶段建议chapterCount章，从第{chapterCount}章，从第chapterCount章，从第{startCh}章到第${endCh}章。
+
+lastBatchTail：前一批次中最后一章的完整细化文本（用于衔接）。
+lastEndingSentence：从前一批次最后一章中提取"结尾句"字段的内容。
+阶段解析逻辑（30-wizard.js 中的 parseStagesFromVolume）：
+从卷纲文本中用正则匹配 /阶段[一二三四五六七八九十\d]+\s*[·\s]+(.+?)（(\d+)章）/g 提取阶段名和章数。
+确认单批：push 到 NP.chapterDetails[vol].batches → 更新 merged（拼接所有 batches）→ saveState。
+全部阶段完成后：可以点"导出本卷 TXT"进入 Step 7。
+
+Step 7 · 导出
+
+纯本地操作，无 API 调用。
+UI：
+· 卷选择下拉框
+· 导出预览（只读 textarea，显示最终 TXT 内容）
+· 格式验证报告（检查结果列表）
+· 操作：下载 TXT / 复制到剪贴板 / 导出全部资产 JSON
+详见第六节"导出模块"。
+
+五、资产管理面板
+独立于步骤向导的第二个视图。通过顶部标签切换：向导 | 资产管理 | 导出。
+
+功能：
+· 左侧资产列表：树形结构，分类显示所有产物
+📋 选题定盘
+👤 角色
+  ├─ 叶临渊（主角）
+  ├─ 姬霓裳（女主）
+  └─ 洛微澜（女主）
+🌍 世界观
+📖 母总纲
+📕 卷总纲
+  ├─ 卷一
+  └─ 卷二
+📝 章节细化
+  ├─ 卷一（36章）
+  └─ 卷二（未生成）· 右侧编辑器：选中某项后加载其完整文本，可直接编辑保存· 底部操作栏：保存当前 / 导出全部资产 JSON / 导入资产 JSON / 删除当前项
+40-assets.js 需要提供的函数：
+
+// 构建资产树数据
+function buildAssetTree() → [{type, id, label, hasContent}]// 加载资产到编辑器function loadAsset(type, id) → string
+// 保存编辑器内容到对应资产function saveAsset(type, id, content) → void
+// 删除资产function deleteAsset(type, id) → void
+// 导出全部资产为 JSONfunction exportAssetsJson() → void  // 触发下载
+// 导入 JSON 覆盖资产function importAssetsJson(file) → Promise
+// 资产类型映射const ASSET_TYPES = {  topicSheet:     { label: "选题定盘", icon: "📋" },  character:      { label: "角色",     icon: "👤" },  worldBuilding:  { label: "世界观",   icon: "🌍" },  masterOutline:  { label: "母总纲",   icon: "📖" },  volumeOutline:  { label: "卷总纲",   icon: "📕" },  chapterDetail:  { label: "章节细化", icon: "📝" },};
+
+六、导出模块（50-export.js）—— 对接下游的关键
+最终 TXT 的目标格式：
+严格匹配下游 novel-workflow-refactor 的 splitChapters() 拆分规则和 analyzeChapterTask() 预检要求。
+
+function buildExportTxt(volumeNumber) {
+  const vol = NP.volumeOutlines[volumeNumber];
+  const detail = NP.chapterDetails[volumeNumber];
+  if (!vol || !detail?.merged) return { txt: "", warnings: [] };  const warnings = [];
+  // 构建文件头（会被下游识别为"全局施工约束"）  const header = [    NP.project.name || "未命名",    vol.name,    每章目标字数：5000-7000字,    主视角：${getProtagonistName()},    "",  ].join("\n");
+  const body = detail.merged;
+  // ===== 格式验证 =====  const chapterRe = /^第[零一二三四五六七八九十百千万\d]+章/gm;  const chapterMatches = [...body.matchAll(chapterRe)];
+  if (chapterMatches.length === 0) {    warnings.push("未找到任何章节标题（第N章），下游无法拆分");  }
+  // 逐章检查关键字段  for (let i = 0; i < chapterMatches.length; i++) {    const start = chapterMatches[i].index;    const end = i + 1 < chapterMatches.length      ? chapterMatches[i + 1].index : body.length;    const chunk = body.slice(start, end);    const title = chapterMatches[i][0];
+if (!/开头句/.test(chunk))
+  warnings.push(`${title}：缺少"开头句"字段`);
+if (!/结尾句/.test(chunk))
+  warnings.push(`${title}：缺少"结尾句"字段`);
+if (!/本章目标/.test(chunk))
+  warnings.push(`${title}：缺少"本章目标"字段`);
+if (!/写骨建议/.test(chunk))
+  warnings.push(`${title}：缺少"写骨建议"字段`);
+if (!/质量检查建议/.test(chunk))
+  warnings.push(`${title}：缺少"质量检查建议"字段`);
+if (!/(本章硬性要求|硬性要求|必须保留|必须埋入|不得展开)/.test(chunk))
+  warnings.push(`${title}：缺少"硬性要求"字段`);
+
+// 检查开头句和结尾句是否用引号包裹
+const openBlock = extractBlock(chunk, "开头句");
+if (openBlock && !/^[""]/.test(openBlock.trim()))
+  warnings.push(`${title}：开头句未用引号包裹，下游锚点提取可能失败`);
+const closeBlock = extractBlock(chunk, "结尾句");
+if (closeBlock && !/^[""]/.test(closeBlock.trim()))
+  warnings.push(`${title}：结尾句未用引号包裹`);
+
+  }
+  return { txt: header + body, warnings };}
+function downloadTxt(volumeNumber) {  const { txt, warnings } = buildExportTxt(volumeNumber);  if (warnings.length) {    renderExportWarnings(warnings);    // 不阻止下载，只显示警告  }  const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });  const url = URL.createObjectURL(blob);  const a = document.createElement("a");  a.href = url;  a.download = ${NP.project.name || "novel"}_${NP.volumeOutlines[volumeNumber]?.name || "卷" + volumeNumber}_细化.txt;  a.click();  URL.revokeObjectURL(url);}
+function copyToClipboard(volumeNumber) {  const { txt, warnings } = buildExportTxt(volumeNumber);  if (warnings.length) renderExportWarnings(warnings);  navigator.clipboard.writeText(txt);}
+function getProtagonistName() {  const p = NP.characters.find(c => c.role === "protagonist");  if (p?.name) return p.name;  // 从角色卡内容中提取姓名字段  if (p?.content) {    const m = p.content.match(/姓名[：:]\s*(.+)/);    if (m) return m[1].trim();  }  return "主角";}
+function extractBlock(text, label) {  const escaped = label.replace(/[.*+?^${}()|[]\]/g, "\$&");  const m = text.match(new RegExp(${escaped}\\s*\\n([\\s\\S]*?)(?=\\n\\s*(?:开头句|结尾句|本章目标|设定释放|修炼体系释放|情绪点|伏笔|正文写作注意事项|\\d+字写骨建议|\\d+字润色方向|质量检查建议|本章爽点|酸甜苦辣|女主|暧昧点|世界观|有趣点|男主的规划|意想不到的奇遇|本章硬性要求|副标题|本章位置|时间线)\\s*\\n|$)));  return m ? m[1].trim() : "";}
+
+七、API 模块（20-api.js）
+/**
+ * 调用模型。支持 SSE 流式和非流式。
+ * @param {string} systemPrompt - system message 内容
+ * @param {string} userMessage  - user message 内容
+ * @param {function} onChunk    - 流式回调 (deltaText) => void
+ * @returns {Promise}   - 完整响应文本
+ */
+async function callModel(systemPrompt, userMessage, onChunk = null) {
+  const cfg = NP.config;
+  const abort = new AbortController();
+  NP.activeAbort = abort;  const payload = {    model:       cfg.model,    temperature: cfg.temperature,    max_tokens:  cfg.maxTokens,    stream:      cfg.enableStream,    messages: [      { role: "system", content: systemPrompt },      { role: "user",   content: userMessage },    ],  };
+  const resp = await fetch(cfg.apiUrl, {    method:  "POST",    headers: {      "Content-Type":  "application/json",      "Authorization": Bearer ${cfg.apiKey},    },    body:   JSON.stringify(payload),    signal: abort.signal,  });
+  if (!resp.ok) {    const body = await resp.text().catch(() => "");    throw new Error(HTTP ${resp.status}: ${body.slice(0, 200)});  }
+  if (!cfg.enableStream) {    const json = await resp.json();    const text = json.choices?.[0]?.message?.content || "";    if (onChunk) onChunk(text);    return text;  }
+  // SSE 流式解析——复用下游 parseSseChunk 的模式  const reader = resp.body.getReader();  const decoder = new TextDecoder();  let full = "";  let buffer = "";
+  while (true) {    const { done, value } = await reader.read();    if (done) break;    buffer += decoder.decode(value, { stream: true });
+const lines = buffer.split("\n");
+buffer = lines.pop() || "";
+
+for (const line of lines) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed === "data: [DONE]") continue;
+  if (!trimmed.startsWith("data: ")) continue;
+  try {
+    const json = JSON.parse(trimmed.slice(6));
+    const delta = json.choices?.[0]?.delta?.content || "";
+    if (delta) {
+      full += delta;
+      if (onChunk) onChunk(delta);
+    }
+  } catch (e) {
+    // 忽略解析错误的行
+  }
+}
+
+  }
+  NP.activeAbort = null;  return full;}
+function abortGeneration() {  if (NP.activeAbort) {    NP.activeAbort.abort();    NP.activeAbort = null;  }}
+
+八、UI 布局（index.html）
+┌─────────────────────────────────────────────────────────────┐
+│  Novel Planner  [项目: 神兵绝响 ▼] [新建] [删除]  ⚙配置   │
+│  ● 向导   ● 资产管理   ● 导出                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌── 步骤导航 ──────────────────────────────────────────┐   │
+│  │ ✅想法  ✅选题  ●角色  ○世界观  ○母总纲  ○卷纲  ○细化 │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ┌── 上下文（折叠）─────┐  ┌── 编辑器 ─────────────────┐   │
+│  │ ▶ 选题定盘摘要       │  │                             │   │
+│  │ ▶ 已有角色列表       │  │   （AI 生成结果）            │   │
+│  │ ▶ 世界观骨架摘要     │  │   （用户可直接编辑）         │   │
+│  │                      │  │                             │   │
+│  │  Step 2 特有：        │  │                             │   │
+│  │  ┌─ 角色卡片列表 ──┐ │  │                             │   │
+│  │  │ 叶临渊 [编辑][删]│ │  │                             │   │
+│  │  │ 姬霓裳 [编辑][删]│ │  │                             │   │
+│  │  │ [+ 添加角色]     │ │  │                             │   │
+│  │  └─────────────────┘ │  │                             │   │
+│  │                      │  │                             │   │
+│  │  Step 5-6 特有：      │  │                             │   │
+│  │  卷选择 [▼]          │  │                             │   │
+│  │  阶段选择 [▼]        │  │                             │   │
+│  └──────────────────────┘  └─────────────────────────────┘   │
+│                                                             │
+│  ┌── 操作栏 ────────────────────────────────────────────┐   │
+│  │ [生成] [重新生成] [中止] [确认并下一步] [保存草稿]    │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ┌── 流式输出预览（生成时展开）─────────────────────────┐   │
+│  │ ▌正在生成... 已输出 3,421 字                          │   │
+│  │ ┌──────────────────────────────────────────────────┐  │   │
+│  │ │ （实时流式文本）                                   │  │   │
+│  │ └──────────────────────────────────────────────────┘  │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                             │
+│  Step 6 特有：                                              │
+│  ┌── 已合并批次预览（只读）────────────────────────────┐   │
+│  │ 第一章 · 废兵库 ... 第九章 · 对视 ...                 │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+配置面板（点击 ⚙ 展开/收起）：
+· API URL / API Key / 模型名 / Temperature / Max Tokens / 流式开关
+· 高级：各步骤 system prompt 的查看和编辑（textarea）
+· 保存配置 / 恢复默认
+
+九、Prompts 模块（10-prompts.js）
+所有 prompt 集中在这个文件中。默认值就是对应 VCP Agent 的调用标签。用户可以在配置面板中替换为自定义 prompt。
+
+const PROMPTS = {
+  topicSheet:    "{{定盘}}",
+  characterCard: "{{铸相}}",
+  worldBuilding: "{{造域}}",
+  masterOutline: "{{纲目}}",
+  volumeOutline: "{{纲目}}",
+  chapterDetail: "{{纲目}}",
+};// 从 localStorage 加载用户自定义 prompt（如有）function loadPrompts() {  const saved = localStorage.getItem("nvpl_prompts");  if (saved) {    try { Object.assign(PROMPTS, JSON.parse(saved)); } catch(e) {}  }}
+// 保存用户自定义 promptfunction savePrompts() {  localStorage.setItem("nvpl_prompts", JSON.stringify(PROMPTS));}
+// 恢复默认function resetPrompts() {  PROMPTS.topicSheet    = "{{定盘}}";  PROMPTS.characterCard = "{{铸相}}";  PROMPTS.worldBuilding = "{{造域}}";  PROMPTS.masterOutline = "{{纲目}}";  PROMPTS.volumeOutline = "{{纲目}}";  PROMPTS.chapterDetail = "{{纲目}}";  savePrompts();}
+/**
+
+构建 user message。
+
+根据步骤 ID 和上下文数据，返回完整的 user message 字符串。
+
+每步的构建逻辑不同——这个函数是 30-wizard.js 中 generateStep 的核心依赖。 */function buildUserMessage(stepId, context = {}) {  switch (stepId) { case 1: // 选题定盘   return 我的故事想法：\n\n${NP.idea}\n\n请直接输出完整选题定盘书。;
+ case 2: // 角色设计   return [ 选题定盘书：\n${NP.topicSheet}, \n已有角色：\n${NP.characters.map(c => · c.name（{c.name}（c.name（{roleLabel(c.role)}）).join("\n") || "暂无"}, \n请为以下角色生成完整资产卡：, 角色定位：${roleLabel(context.role)}, 角色名：${context.name || "请你起名"}, 补充描述：${context.desc || "无"},   ].join("\n");
+ case 3: // 世界构建   return [ 选题定盘书：\n${NP.topicSheet}, \n已确认角色：\n${NP.characters.map(c => 【${c.name}·\({roleLabel(c.role)}】\n\){extractCharacterSummary(c.content)}).join("\n\n")}, \n请直接输出完整世界观设定文档。,   ].join("\n");
+ case 4: // 母总纲   return [ 【指令：母总纲】, \n===选题定盘书===\n${NP.topicSheet}, \n===角色资产===\n${NP.characters.map(c => c.content).join("\n\n---\n\n")}, \n===世界观设定===\n${NP.worldBuilding}, \n请直接输出完整母总纲。,   ].join("\n");
+ case 5: // 卷总纲   return [ 【指令：卷总纲】, \n===母总纲===\n${NP.masterOutline}, \n===本卷相关角色===\n${filterCharactersForVolume(context.volumeNumber)}, \n===世界观设定===\n${NP.worldBuilding}, context.prevEndState ? \n===前一卷卷末状态===\n${context.prevEndState} : "", \n请展开卷${context.volumeNumber}的完整卷总纲。,   ].filter(Boolean).join("\n");
+ case 6: // 章节细化   return [ 【指令：章节细化】, \n===卷总纲===\n${NP.volumeOutlines[context.vol]?.content || ""}, \n===本卷相关角色===\n${filterCharactersForVolume(context.vol)}, \n===世界观设定===\n${NP.worldBuilding}, context.lastBatchTail ? \n===上一阶段末尾章节===\n${context.lastBatchTail}\n\n上一阶段最后一章的结尾句是："${context.lastEndingSentence}"，本阶段第一章开头必须自然衔接。 : "", \n请细化阶段${context.stageNum}（${context.stageName}）的所有章节。, 本阶段建议${context.chapterCount}章，从第${context.startCh}章到第${context.endCh}章。,   ].filter(Boolean).join("\n");
+ default:   return "";  }}
+
+function roleLabel(role) {  return { protagonist: "主角", heroine: "女主", antagonist: "反派", supporting: "配角" }[role] || role;}
+function extractCharacterSummary(content) {  // 从角色卡中提取：姓名、身份锚点、能力起点、关系网  // 省略全文，只发摘要，省 token  const lines = content.split("\n");  const keep = [];  let capturing = false;  const captureKeys = ["姓名", "身份锚点", "角色定位", "核心命题", "能力", "起点", "关系网"];  for (const line of lines) {    if (captureKeys.some(k => line.includes(k))) { capturing = true; }    if (capturing) {      keep.push(line);      if (keep.length > 12) break;    }  }  return keep.join("\n") || content.slice(0, 500);}
+function filterCharactersForVolume(volumeNumber) {  // 尝试从母总纲的"角色出场时间表"中判断本卷出场角色  // 如果判断不了就返回全部角色  // 简单实现：搜索 "卷{volumeNumber}" 出现在哪些角色行  const table = NP.masterOutline.match(/角色出场时间表[\s\S]?(?=\n\s伏笔|===|$)/)?.[0] || "";  if (!table) return NP.characters.map(c => c.content).join("\n\n---\n\n");
+  const volPattern = new RegExp(卷${volumeNumber}|卷[${cn(volumeNumber)}], "g");  const relevant = NP.characters.filter(c => {    const line = table.split("\n").find(l => l.includes(c.name));    return !line || volPattern.test(line);  });  return (relevant.length ? relevant : NP.characters).map(c => c.content).join("\n\n---\n\n");}
+function cn(n) {  return "零一二三四五六七八九十"[n] || n;}
+
+十、Codex 实现优先级
+P0 · 核心骨架（必须先做）
+1. index.html — 完整页面结构
+2. styles.css — 复用下游 CSS 变量体系
+3. 00-state.js — 数据模型 + localStorage 持久化 + DOM 映射
+4. 10-prompts.js — prompt 模板 + buildUserMessage
+5. 20-api.js — callModel + SSE 流式
+6. 30-wizard.js — 步骤流转 + generateStep + confirmStep
+7. 60-events.js — 事件绑定
+8. 70-bootstrap.js — 启动 + 恢复
+验收：能从 Step 0 走到 Step 4（母总纲），每步能生成、编辑、确认。
+
+P1 · 卷纲和细化（骨架能跑后做）
+1. Step 5 的卷选择 + 逐卷生成逻辑
+2. Step 6 的阶段解析 + 分批生成 + 批次合并逻辑
+3. 50-export.js — TXT 导出 + 格式验证 + 下载/复制
+验收：能生成卷纲和章节细化，导出的 TXT 粘贴到 novel-workflow-refactor 后能正确拆分且预检全绿。
+
+P2 · 资产管理（导出通了后做）
+1. 40-assets.js — 资产树 + CRUD + 导入导出
+2. 资产管理面板 UI
+3. 多项目支持（项目切换、新建、删除）
+验收：可以查看/编辑/导出所有中间产物，可以在多个小说项目之间切换。
+
+十一、Codex 必须遵守的约束
+
+约束
+说明
+
+纯浏览器
+无 Node、无构建工具、无 npm。<script> 标签加载。
+
+全局作用域
+和下游一样用全局变量，不用 ES Module。顺序加载。
+
+共享 API 网关
+localhost:6005，OpenAI 兼容格式，Bearer token。
+
+localStorage 隔离
+前缀 nvpl_，不与下游 novel.workflow. 冲突。
+
+不修改下游
+novel-planner 是独立项目，不修改 novel-workflow-refactor 的任何文件。
+
+CSS 变量复用
+复用下游的 --bg, --panel, --accent, --border 等变量，保持视觉一致。
+
+每步一调用
+除 Step 2（每角色一调用）和 Step 6（每阶段一调用）外，每步只一次 API。
+
+Prompt 可配置
+默认值是 VCP Agent 标签（{{定盘}}等），可在配置面板替换为自定义文本。
+
+导出格式死锁
+章节细化的输出格式由 prompt 控制，50-export.js 只做拼接和验证。
+
+目录位置
+项目放在 E:\AI_projects\VCPToolBox\Plugin\novel-planner\，和 novel-workflow-refactor 平级。
+
+给 Codex 的最终指令
+在 E:\AI_projects\VCPToolBox\Plugin\novel-planner</code> 下创建上述文件结构。
+按 P0 → P1 → P2 顺序实现。每个优先级完成后可以独立验收。
+P0 验收标准：打开 index.html，能从"想法"走到"母总纲"，每步能生成（流式显示）、编辑、确认，状态持久化到 localStorage。
+P1 验收标准：能生成卷纲和章节细化，导出 TXT 后粘贴到 novel-workflow-refactor，能正确拆分且预检不出 blocker。
+P2 验收标准：资产管理面板能查看/编辑/删除所有产物，能导出/导入 JSON，能切换多个项目。
+所有 system prompt 的默认值是 VCP Agent 调用标签（{{定盘}} {{铸相}} {{造域}} {{纲目}}），用户可在配置面板中替换。
+本文档中的所有代码片段是参考实现，不是必须逐字复制。Codex 可以按自己的判断优化实现细节，但必须保持数据模型、API 接口、导出格式和 UI 布局与本文档一致。
+现在把这份规格书存档，然后您可以直接丢给 Codex 开工。
+Novel-Planner上游规划工具技术规格书2026-06-14Maid: [叙澜的书房]叙澜[18:23] Novel Planner 上游规划工具技术规格书完成。
+核心定位：浏览器单页应用，引导用户从 Idea 走到可直接喂给 novel-workflow-refactor 的章节细化 TXT。
+文件结构：index.html + styles.css + 8 个 JS 模块（00-state / 10-prompts / 20-api / 30-wizard / 40-assets / 50-export / 60-events / 70-bootstrap）
+步骤向导：7 步流程Step 0 想法（无 API）→ Step 1 选题定盘（{{定盘}}）→ Step 2 角色设计（{{铸相}}，每角色一调用）→ Step 3 世界构建（{{造域}}）→ Step 4 母总纲（{{纲目}}）→ Step 5 卷总纲（{{纲目}}，逐卷）→ Step 6 章节细化（{{纲目}}，逐阶段分批）→ Step 7 导出 TXT
+技术约束：纯浏览器、无构建工具、共享 VCP API 网关 localhost:6005、localStorage 持久化（nvpl_ 前缀）、CSS 变量复用下游体系。
+对接方式：导出 UTF-8 TXT → 粘贴到 novel-workflow-refactor 的"多章节细化文本"框 → 拆分 → 三阶段流水线。
+导出格式验证：检查章节标题格式、开头句/结尾句引号包裹、关键字段（本章目标/写骨建议/质量检查建议/硬性要求）存在性。
+实现优先级：P0 核心骨架（Step 0-4）→ P1 卷纲+细化+导出 → P2 资产管理+多项目。
+VCP Agent 对应：定盘（选题）、铸相（角色）、造域（世界观）、纲目（总纲/卷纲/细化）、骨相（写骨）、生息（润色）、裁灯（质检）。
+Tag: Novel Planner, 技术规格书, 上游规划工具, novel-workflow对接, 章节细化导出格式, VCP Agent架构, 定盘, 铸相, 造域, 纲目

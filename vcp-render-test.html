@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VCP 渲染测试台</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --primary: #2563eb;
+      --soft: #eff6ff;
+      font-family: Inter, "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .panel {
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+    }
+
+    .source-panel {
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      min-height: calc(100vh - 32px);
+    }
+
+    header {
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 13px;
+    }
+
+    .drop-zone {
+      margin: 14px 16px 0;
+      padding: 12px;
+      border: 1px dashed #93c5fd;
+      border-radius: 8px;
+      background: var(--soft);
+      color: #1d4ed8;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .drop-zone.dragging {
+      background: #dbeafe;
+      border-color: #2563eb;
+    }
+
+    textarea {
+      width: calc(100% - 32px);
+      margin: 14px 16px;
+      min-height: 0;
+      resize: none;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      font: 13px/1.7 Consolas, "JetBrains Mono", monospace;
+      color: #0f172a;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 0 16px 16px;
+    }
+
+    .option {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      user-select: none;
+    }
+
+    .option input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: #1f2937;
+      padding: 9px 12px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    button.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .render-panel {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: calc(100vh - 32px);
+      overflow: hidden;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfdff;
+    }
+
+    .tabs button.active {
+      border-color: var(--primary);
+      background: var(--soft);
+      color: #1d4ed8;
+    }
+
+    .views {
+      overflow: auto;
+      padding: 16px;
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    .preview-shell {
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+
+    .empty {
+      display: grid;
+      min-height: 260px;
+      place-items: center;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      background: #fff;
+    }
+
+    .memory-card {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      line-height: 1.85;
+    }
+
+    .memory-card h1,
+    .memory-card h2,
+    .memory-card h3 {
+      color: #0f172a;
+      line-height: 1.3;
+    }
+
+    .memory-card h1 {
+      margin-top: 0;
+      font-size: 26px;
+    }
+
+    .memory-card h2 {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      font-size: 20px;
+    }
+
+    .memory-card pre {
+      overflow: auto;
+      padding: 12px;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .meta-grid article {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+
+    .meta-grid strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .chat-log {
+      margin-top: 16px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: #334155;
+      font-size: 13px;
+    }
+
+    .chat-log strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #0f172a;
+    }
+
+    .raw-box {
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0f172a;
+      color: #e5e7eb;
+      font: 13px/1.7 Consolas, "JetBrains Mono", monospace;
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .source-panel,
+      .render-panel {
+        min-height: auto;
+      }
+
+      textarea {
+        min-height: 320px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="panel source-panel">
+      <header>
+        <h1>VCP 渲染测试台</h1>
+        <p>把 VCP Agent 返回内容粘进来，或拖入 txt/md 文件。页面会拆成“Atlas 人类笔记”和“VCP AI 记忆”。</p>
+      </header>
+      <div id="dropZone" class="drop-zone">拖入 .txt / .md 到这里</div>
+      <textarea id="sourceInput" spellcheck="false" placeholder="粘贴 VCP Agent 返回的完整内容..."></textarea>
+      <div class="actions">
+        <button id="renderButton" class="primary">渲染</button>
+        <button id="clearButton">清空</button>
+        <button id="sampleButton">填入示例</button>
+        <label class="option" title="仅用于本地测试可信 VCP 输出。开启后会用 createContextualFragment 激活动态 script。">
+          <input id="executeScripts" type="checkbox" />
+          执行气泡脚本
+        </label>
+      </div>
+    </section>
+
+    <section class="panel render-panel">
+      <nav class="tabs">
+        <button class="active" data-tab="human">Atlas 人类笔记</button>
+        <button data-tab="memory">VCP AI 记忆</button>
+        <button data-tab="raw">原始拆分</button>
+      </nav>
+      <div class="views">
+        <section id="humanView" class="view active">
+          <div class="preview-shell">
+            <div id="humanPreview" class="empty">等待渲染人类笔记</div>
+          </div>
+          <div id="chatLog" class="chat-log" hidden>
+            <strong>按钮事件劫持测试</strong>
+            <div id="chatLogText"></div>
+          </div>
+        </section>
+        <section id="memoryView" class="view">
+          <div id="memoryMeta" class="meta-grid"></div>
+          <article id="memoryPreview" class="memory-card empty">等待渲染 VCP 记忆</article>
+        </section>
+        <section id="rawView" class="view">
+          <pre id="rawPreview" class="raw-box">等待渲染</pre>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const sourceInput = document.getElementById('sourceInput');
+    const dropZone = document.getElementById('dropZone');
+    const humanPreview = document.getElementById('humanPreview');
+    const memoryPreview = document.getElementById('memoryPreview');
+    const memoryMeta = document.getElementById('memoryMeta');
+    const rawPreview = document.getElementById('rawPreview');
+    const chatLog = document.getElementById('chatLog');
+    const chatLogText = document.getElementById('chatLogText');
+    const executeScripts = document.getElementById('executeScripts');
+
+    let humanShadow = null;
+
+    document.getElementById('renderButton').addEventListener('click', render);
+    document.getElementById('clearButton').addEventListener('click', () => {
+      sourceInput.value = '';
+      render();
+    });
+    document.getElementById('sampleButton').addEventListener('click', () => {
+      sourceInput.value = sampleText();
+      render();
+    });
+
+    document.querySelectorAll('.tabs button').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('.tabs button').forEach((item) => item.classList.remove('active'));
+        document.querySelectorAll('.view').forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        document.getElementById(button.dataset.tab + 'View').classList.add('active');
+      });
+    });
+
+    ['dragenter', 'dragover'].forEach((name) => {
+      dropZone.addEventListener(name, (event) => {
+        event.preventDefault();
+        dropZone.classList.add('dragging');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach((name) => {
+      dropZone.addEventListener(name, (event) => {
+        event.preventDefault();
+        dropZone.classList.remove('dragging');
+      });
+    });
+
+    dropZone.addEventListener('drop', async (event) => {
+      const file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (!file) return;
+      sourceInput.value = await file.text();
+      render();
+    });
+
+    sourceInput.addEventListener('paste', () => {
+      window.setTimeout(render, 0);
+    });
+
+    function render() {
+      const parsed = parseVcpResponse(sourceInput.value || '');
+      renderHuman(parsed.human);
+      renderMemory(parsed.memory, parsed.tool);
+      rawPreview.textContent = [
+        '===== 解析格式 =====',
+        parsed.format,
+        '',
+        '===== Atlas 人类笔记 =====',
+        parsed.human || '(空)',
+        '',
+        '===== VCP AI 记忆 =====',
+        parsed.memory || '(空)',
+        '',
+        '===== TOOL_REQUEST =====',
+        parsed.tool || '(空)',
+      ].join('\n');
+    }
+
+    function parseVcpResponse(text) {
+      const blockParsed = parseDualBlocks(text);
+      if (blockParsed) return blockParsed;
+
+      const toolStart = text.indexOf('<<<[TOOL_REQUEST]>>>');
+      const toolEnd = text.indexOf('<<<[END_TOOL_REQUEST]>>>');
+      if (toolStart < 0) {
+        return { format: '未检测到分隔符，整体作为 Atlas 人类笔记', human: text.trim(), tool: '', memory: '' };
+      }
+      const human = text.slice(0, toolStart).trim();
+      const tool = text.slice(toolStart, toolEnd > toolStart ? toolEnd : text.length).trim();
+      return {
+        format: 'TOOL_REQUEST 兼容格式',
+        human,
+        tool,
+        memory: extractToolField(tool, 'Content') || '',
+      };
+    }
+
+    function parseDualBlocks(text) {
+      const human = extractDelimitedBlock(text, 'ATLAS_HUMAN_NOTE');
+      const memory = extractDelimitedBlock(text, 'VCP_AI_MEMORY');
+      if (human === null && memory === null) return null;
+      return {
+        format: 'Atlas/VCP 双区块格式',
+        human: human || '',
+        memory: memory || '',
+        tool: '',
+      };
+    }
+
+    function extractDelimitedBlock(text, name) {
+      const pattern = new RegExp('<<<\\s*' + name + '\\s*>>>([\\s\\S]*?)<<<\\s*END_' + name + '\\s*>>>', 'i');
+      const match = pattern.exec(text);
+      return match ? match[1].trim() : null;
+    }
+
+    function extractToolField(tool, fieldName) {
+      const escaped = new RegExp(fieldName + ':\\s*「始ESCAPE」([\\s\\S]*?)「末ESCAPE」').exec(tool);
+      if (escaped) return escaped[1].trim();
+      const normal = new RegExp(fieldName + ':\\s*「始」([\\s\\S]*?)「末」').exec(tool);
+      if (normal) return normal[1].trim();
+      return '';
+    }
+
+    function renderHuman(html) {
+      chatLog.hidden = true;
+      chatLogText.textContent = '';
+      humanPreview.className = '';
+      humanPreview.innerHTML = '';
+
+      if (!html.trim()) {
+        humanPreview.className = 'empty';
+        humanPreview.textContent = '没有检测到 Atlas 人类笔记';
+        return;
+      }
+
+      humanShadow = humanPreview.attachShadow ? humanPreview.shadowRoot || humanPreview.attachShadow({ mode: 'open' }) : null;
+      const shellCss = `
+        :host {
+          display: block;
+          min-height: 240px;
+        }
+        button {
+          cursor: pointer;
+        }
+        img {
+          max-width: 100%;
+          height: auto;
+        }
+      `;
+      if (humanShadow) {
+        renderVcpBubble(humanShadow, `<style>${shellCss}</style>${html}`, executeScripts.checked);
+        humanShadow.addEventListener('click', hijackButtonClick);
+      } else {
+        renderVcpBubble(humanPreview, html, executeScripts.checked);
+        humanPreview.addEventListener('click', hijackButtonClick);
+      }
+    }
+
+    function renderVcpBubble(container, htmlContent, allowScripts) {
+      container.innerHTML = '';
+      const content = allowScripts
+        ? htmlContent
+        : htmlContent.replace(/<script[\s\S]*?<\/script>/gi, '');
+      if (!allowScripts) {
+        container.innerHTML = content;
+        return;
+      }
+      const range = document.createRange();
+      range.selectNode(container instanceof ShadowRoot ? container.host : container);
+      const fragment = range.createContextualFragment(content);
+      container.appendChild(fragment);
+    }
+
+    function hijackButtonClick(event) {
+      const button = event.target.closest && event.target.closest('button');
+      if (!button) return;
+      const onClick = button.getAttribute('onclick') || '';
+      const match = onClick.match(/input\((['"])([\s\S]*?)\1\)/);
+      if (!match) return;
+      event.preventDefault();
+      event.stopPropagation();
+      chatLog.hidden = false;
+      chatLogText.textContent = `模拟发送给 Agent：${match[2]}`;
+    }
+
+    function renderMemory(memory, tool) {
+      const folder = extractToolField(tool, 'folder');
+      const fileName = extractToolField(tool, 'fileName');
+      const tag = extractToolField(tool, 'Tag') || extractTagLine(memory);
+      memoryMeta.innerHTML = [
+        ['日记本', folder || '未检测到'],
+        ['文件名', fileName || '未检测到'],
+        ['标签', tag || '未检测到'],
+      ].map(([label, value]) => `<article><strong>${escapeHtml(label)}</strong>${escapeHtml(value)}</article>`).join('');
+
+      if (!memory.trim()) {
+        memoryPreview.className = 'memory-card empty';
+        memoryPreview.textContent = '没有检测到 VCP AI 记忆 Content';
+        return;
+      }
+      memoryPreview.className = 'memory-card';
+      memoryPreview.innerHTML = markdownToHtml(memory);
+    }
+
+    function extractTagLine(text) {
+      const match = /^Tag[:：]\s*(.+)$/im.exec(text || '');
+      return match ? match[1].trim() : '';
+    }
+
+    function markdownToHtml(markdown) {
+      const lines = escapeHtml(markdown).split('\n');
+      const html = [];
+      let inList = false;
+      let inCode = false;
+      const closeList = () => {
+        if (inList) {
+          html.push('</ul>');
+          inList = false;
+        }
+      };
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (line.startsWith('```')) {
+          closeList();
+          html.push(inCode ? '</code></pre>' : '<pre><code>');
+          inCode = !inCode;
+          continue;
+        }
+        if (inCode) {
+          html.push(raw + '\n');
+          continue;
+        }
+        if (!line) {
+          closeList();
+          continue;
+        }
+        const heading = line.match(/^(#{1,4})\s+(.+)$/);
+        if (heading) {
+          closeList();
+          const level = heading[1].length;
+          html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+          continue;
+        }
+        if (/^[-*]\s+/.test(line)) {
+          if (!inList) {
+            html.push('<ul>');
+            inList = true;
+          }
+          html.push(`<li>${inlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>`);
+          continue;
+        }
+        closeList();
+        html.push(`<p>${inlineMarkdown(line)}</p>`);
+      }
+      closeList();
+      if (inCode) html.push('</code></pre>');
+      return html.join('');
+    }
+
+    function inlineMarkdown(text) {
+      return text
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\[([^\]]+)]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function sampleText() {
+      return `<<<ATLAS_HUMAN_NOTE>>>
+<div id="vcp-root" style="font-family: Georgia, 'Noto Serif SC', serif; background:#111118; color:#c4c4cc; padding:28px; border-radius:16px; line-height:1.8;">
+  <h2 style="text-align:center;color:#a2b5cd;">视觉通感·九歌设定备忘</h2>
+  <p style="text-align:center;color:#708090;">死寂之中的安息清歌 · 第九柱资产定盘</p>
+  <style>
+    #vcp-root .pulse-dot {
+      display:inline-block;
+      width:10px;
+      height:10px;
+      margin-right:8px;
+      border-radius:999px;
+      background:#a2b5cd;
+      animation:vcpPulse 1s infinite alternate;
+    }
+    @keyframes vcpPulse {
+      from { transform:scale(.75); opacity:.45; }
+      to { transform:scale(1.35); opacity:1; }
+    }
+  </style>
+  <div style="background:rgba(162,181,205,.08);border-left:3px solid #708090;padding:16px;border-radius:0 8px 8px 0;">
+    <strong style="color:#a2b5cd;"><span class="pulse-dot"></span>主人，这是一份极具骨感与暮色的设定补全。</strong><br>
+    九歌的加入，为《神兵绝响》的大罗心炉补上了“允许终结”的伦理边界。
+  </div>
+  <p id="script-status" style="color:#708090;">脚本状态：未执行</p>
+  <p><button onclick="input('继续提炼九歌的卷一埋线')">继续提炼</button></p>
+</div>
+<scr` + `ipt>
+  const root = document.getElementById('vcp-root');
+  const status = root && root.querySelector('#script-status');
+  if (status) status.textContent = '脚本状态：已执行，VCP 气泡初始化成功';
+</scr` + `ipt>
+<<<END_ATLAS_HUMAN_NOTE>>>
+
+<<<VCP_AI_MEMORY>>>
+[15:20] 本轮针对《神兵绝响》第九柱·九歌进行文字资产补全与核心设定定盘。
+
+【核心概念】
+第九柱「九歌」，执掌「归墟天道」。本体为「忘川笛 / 忘川骨箫」。
+
+【禁写边界】
+- 严禁写成普通死灵召唤法师。
+- 严禁在卷一提前正式出场。
+
+Tag: 神兵绝响, 九歌, 第九柱, 归墟, 忘川骨箫
+<<<END_VCP_AI_MEMORY>>>`;
+    }
+
+    render();
+  </script>
+</body>
+</html>

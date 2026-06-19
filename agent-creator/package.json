@@ -1,0 +1,13 @@
+{
+  "name": "vcp-agent-creator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "VCP Agent 创生 Web 工具 —— 步骤向导 + 对话式自动填充",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

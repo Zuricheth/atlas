@@ -1,0 +1,124 @@
+{
+  "projects": [
+    {
+      "id": "atlas",
+      "name": "Atlas",
+      "kind": "Project",
+      "accent": "#476f8a",
+      "summary": "智能知识库与 RAG 问答系统",
+      "frontendPort": 5173,
+      "backendPort": 8080,
+      "listenEnabled": true,
+      "path": "..",
+      "url": "http://localhost:5173",
+      "healthUrl": "http://localhost:8080/actuator/health",
+      "ports": [
+        8080,
+        5173
+      ],
+      "start": {
+        "envFiles": [
+          "../config.env"
+        ],
+        "commands": [
+          {
+            "command": ".tools\\apache-maven-3.9.16\\bin\\mvn.cmd",
+            "args": [
+              "-f",
+              "atlas-backend\\pom.xml",
+              "spring-boot:run",
+              "-Dspring-boot.run.profiles=local"
+            ],
+            "cwd": "..",
+            "env": {
+              "ATLAS_SERVER_PORT": "8080"
+            }
+          },
+          {
+            "command": "npm.cmd",
+            "args": [
+              "run",
+              "dev",
+              "--",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "5173"
+            ],
+            "cwd": "../atlas-frontend",
+            "env": {
+              "VITE_API_ORIGIN": "http://localhost:8080"
+            }
+          }
+        ]
+      },
+      "startScript": "C:\\Windows\\System32\\wscript.exe //nologo E:/项目/start-hidden.vbs",
+      "stopScript": "C:\\Windows\\System32\\wscript.exe //nologo E:/项目/stop-hidden.vbs"
+    },
+    {
+      "id": "agent-creator",
+      "name": "VCP Agent Creator",
+      "kind": "Static app",
+      "accent": "#d4a060",
+      "summary": "与烬离对话创生 VCP Agent 系统提示词",
+      "path": "../agent-creator",
+      "url": "http://127.0.0.1:8796",
+      "ports": [
+        8796
+      ],
+      "start": {
+        "command": "node",
+        "args": [
+          "server.js"
+        ],
+        "cwd": "../agent-creator"
+      }
+    },
+    {
+      "id": "ai-image-studio-2",
+      "name": "AI Image Studio",
+      "accent": "#476f8a",
+      "summary": "New API 生图、图片编辑、人物表情包九宫格生成工具，已支持 MCP 接入",
+      "frontendPort": 8790,
+      "backendPort": 8790,
+      "listenEnabled": true,
+      "ports": [
+        8790,
+        8790
+      ],
+      "startScript": "C:\\Windows\\System32\\wscript.exe //nologo E:/项目/ai-image-studio-node/start-hidden.vbs",
+      "stopScript": "C:\\Windows\\System32\\wscript.exe //nologo E:/项目/ai-image-studio-node/stop-hidden.vbs",
+      "kind": "Project"
+    },
+    {
+      "id": "旅行规划",
+      "name": "ai信息搜集",
+      "accent": "#476f8a",
+      "summary": "信息搜集中心",
+      "frontendPort": 5177,
+      "backendPort": 5177,
+      "listenEnabled": true,
+      "ports": [
+        5177,
+        5177
+      ],
+      "startScript": "C:\\Windows\\System32\\wscript.exe //nologo E:\\AI_projects\\AI信息搜集\\start-info-collector.vbs",
+      "stopScript": "C:\\Windows\\System32\\wscript.exe //nologo E:\\AI_projects\\AI信息搜集\\stop-info-collector.vbs",
+      "kind": "Project"
+    },
+    {
+      "id": "小说工作流",
+      "name": "小说工作流",
+      "kind": "HTML",
+      "accent": "#476f8a",
+      "summary": "ai生成长篇小说",
+      "frontendPort": "",
+      "backendPort": "",
+      "listenEnabled": false,
+      "ports": [],
+      "startScript": "",
+      "stopScript": "",
+      "file": "E:\\AI_projects\\VCPToolBox\\image\\神兵绝响\\index.html"
+    }
+  ]
+}

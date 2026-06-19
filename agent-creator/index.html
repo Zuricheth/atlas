@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VCP Agent Creator · 烬离</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  </head>
+  <body>
+    <!-- 视觉氛围层：余烬粒子 + 鼠标 spotlight（纯装饰，对辅助技术隐藏） -->
+    <canvas id="emberField" class="ember-field" aria-hidden="true"></canvas>
+    <div id="spotlight" class="spotlight" aria-hidden="true"></div>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <img class="brand-mark" src="assets/favicon.svg" alt="" aria-hidden="true">
+          <span class="eyebrow">VCP Agent Creator</span>
+          <h1>烬离创生炉</h1>
+          <p class="brand-sub">从一念余烬，塑成完整之灵</p>
+        </div>
+        <div class="connection-strip">
+          <label>
+            <span>API</span>
+            <input id="apiUrl" autocomplete="off">
+          </label>
+          <label>
+            <span>Key</span>
+            <input id="apiKey" autocomplete="off">
+          </label>
+          <label>
+            <span>Model</span>
+            <input id="model" autocomplete="off">
+          </label>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <aside class="step-rail">
+          <div id="stepNav" class="step-nav" aria-label="创生步骤"></div>
+          <section class="context-panel">
+            <span class="eyebrow">默认资料</span>
+            <textarea id="defaultContent" spellcheck="false"></textarea>
+          </section>
+        </aside>
+
+        <section class="creator-panel">
+          <div class="panel-head">
+            <div>
+              <span id="stepKicker" class="eyebrow">Step 0</span>
+              <h2 id="stepTitle">基础信息</h2>
+            </div>
+          <button id="askStepButton" class="subtle-button" type="button">让烬离重填当前步</button>
+          </div>
+
+          <form id="creatorForm" class="form-surface"></form>
+
+          <section class="preview-wrap">
+            <div class="preview-head">
+              <div>
+                <span class="eyebrow">实时预览</span>
+                <strong id="previewMeta">等待输入</strong>
+              </div>
+              <div class="preview-actions">
+                <button id="copyButton" class="subtle-button" type="button">复制</button>
+                <button id="exportButton" class="primary-button" type="button">导出 TXT</button>
+              </div>
+            </div>
+            <pre id="promptPreview"></pre>
+          </section>
+        </section>
+
+        <aside class="chat-panel">
+          <div class="chat-head">
+            <div>
+              <span class="eyebrow">Chat with {{烬离}}</span>
+              <h2>创生对话</h2>
+            </div>
+            <button id="clearChatButton" class="icon-button" type="button" title="清空对话" aria-label="清空对话">×</button>
+          </div>
+          <div id="chatLog" class="chat-log" aria-live="polite"></div>
+          <form id="chatForm" class="chat-form">
+            <textarea id="chatInput" rows="3" placeholder="描述你想创造的 Agent；烬离会自动填好 0-6 步..."></textarea>
+            <div class="chat-actions">
+              <button id="stopButton" class="subtle-button" type="button" disabled>停止</button>
+              <button id="sendButton" class="primary-button" type="submit">发送</button>
+            </div>
+          </form>
+        </aside>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

@@ -3404,7 +3404,7 @@ onMounted(async () => {
           </svg>
         </button>
 
-        <small class="auth-panel__hint">演示账号 · 演示用户 / atlas123456</small>
+        <small class="auth-panel__hint">登录即可使用</small>
       </form>
     </section>
 
