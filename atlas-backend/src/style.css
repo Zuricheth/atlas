@@ -1,0 +1,136 @@
+
+/* ============================================================
+   DeepWiki 交互式认知地图 + 专题导航 + 脏检测徽章
+   ============================================================ */
+
+/* 脏检测徽章 */
+.deepwiki-stale-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.deepwiki-stale-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  animation: a-breathe 2s var(--ease-out) infinite;
+}
+
+/* 专题入口 */
+.deepwiki-topics {
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-xs);
+}
+.deepwiki-topics__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.deepwiki-topics__head strong { font-size: var(--fs-sm); color: var(--text-strong); }
+.deepwiki-topics__head span { font-size: var(--fs-xs); color: var(--muted); }
+.deepwiki-topics__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+.deepwiki-topic-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  background: var(--panel-soft);
+  cursor: pointer;
+  text-align: left;
+  transition: transform var(--t-fast) var(--ease-out),
+              border-color var(--t-fast) var(--ease-out),
+              background var(--t-fast) var(--ease-out);
+}
+.deepwiki-topic-card:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.deepwiki-topic-card:active:not(:disabled) { transform: scale(0.98); }
+.deepwiki-topic-card:disabled { opacity: 0.5; cursor: not-allowed; }
+.deepwiki-topic-card__title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deepwiki-topic-card__arrow { color: var(--primary); font-weight: var(--fw-bold); }
+
+/* 可点击 mermaid 节点 */
+.deepwiki-mermaid-legend {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: inline-block;
+}
+.deepwiki-mermaid-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  font-family: inherit;
+  cursor: default;
+  transition: transform var(--t-fast) var(--ease-out),
+              border-color var(--t-fast) var(--ease-out),
+              background var(--t-fast) var(--ease-out),
+              box-shadow var(--t-fast) var(--ease-out);
+}
+.deepwiki-mermaid-node.is-clickable {
+  cursor: pointer;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+.deepwiki-mermaid-node.is-clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  background: var(--panel);
+  border-color: var(--primary-strong);
+}
+.deepwiki-mermaid-node.is-clickable:active { transform: scale(0.97); }
+.deepwiki-mermaid-node__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex-shrink: 0;
+  animation: a-breathe 2.4s var(--ease-out) infinite;
+}
+.deepwiki-mermaid-node__label { white-space: nowrap; }

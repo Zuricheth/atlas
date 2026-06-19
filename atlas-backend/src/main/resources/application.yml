@@ -1,0 +1,84 @@
+server:
+  port: ${ATLAS_SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+spring:
+  config:
+    import:
+      - optional:file:./config.env[.properties]
+      - optional:file:../config.env[.properties]
+  application:
+    name: atlas-backend
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: "${ATLAS_DB_URL:jdbc:mysql://localhost:3306/atlas?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}"
+    username: "${ATLAS_DB_USERNAME:root}"
+    password: "${ATLAS_DB_PASSWORD:}"
+  flyway:
+    enabled: ${ATLAS_FLYWAY_ENABLED:false}
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 2
+    baseline-description: "Atlas manual schema baseline"
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 1GB
+      # Tomcat 默认每次 multipart 最多 10 个文件，会导致图片库批量投送被截断；调大到 200。
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+atlas:
+  cors:
+    allowed-origins: "${ATLAS_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}"
+  jwt:
+    secret: "${ATLAS_JWT_SECRET:change-me-dev-secret-key-at-least-32-bytes-long}"
+    expire-hours: ${ATLAS_JWT_EXPIRE_HOURS:168}
+  paper-storage:
+    root: "${ATLAS_PAPER_STORAGE_ROOT:data/papers}"
+  library-storage:
+    root: "${ATLAS_LIBRARY_STORAGE_ROOT:data/library}"
+  mineru:
+    enabled: ${ATLAS_MINERU_ENABLED:true}
+    base-url: "${ATLAS_MINERU_BASE_URL:https://mineru.net/api/v4}"
+    agent-base-url: "${ATLAS_MINERU_AGENT_BASE_URL:https://mineru.net/api/v1/agent}"
+    agent-enabled: ${ATLAS_MINERU_AGENT_ENABLED:true}
+    api-token: "${MINERU_API_TOKEN:}"
+    model-version: "${ATLAS_MINERU_MODEL_VERSION:pipeline}"
+    timeout-seconds: ${ATLAS_MINERU_TIMEOUT_SECONDS:300}
+    connect-timeout-seconds: ${ATLAS_MINERU_CONNECT_TIMEOUT_SECONDS:30}
+    poll-interval-millis: ${ATLAS_MINERU_POLL_INTERVAL_MILLIS:5000}
+    office-attempt-timeout-seconds: ${ATLAS_MINERU_OFFICE_ATTEMPT_TIMEOUT_SECONDS:90}
+    agent-max-file-size-bytes: ${ATLAS_MINERU_AGENT_MAX_FILE_SIZE_BYTES:10485760}
+    download-retries: ${ATLAS_MINERU_DOWNLOAD_RETRIES:3}
+    supported-extensions: "${ATLAS_MINERU_SUPPORTED_EXTENSIONS:pdf,doc,docx}"
+  vector-store:
+    qdrant:
+      # MVP 默认关闭外部向量库，直接使用 MySQL 中保存的本地 hash embedding 跑通闭环。
+      # 面试演示时如需展示 Qdrant 双轨检索，把 enabled 改为 true 并启动本地 Qdrant。
+      enabled: ${ATLAS_QDRANT_ENABLED:false}
+      base-url: "${ATLAS_QDRANT_BASE_URL:http://localhost:6333}"
+      api-key: "${ATLAS_QDRANT_API_KEY:}"
+      collection-prefix: "${ATLAS_QDRANT_COLLECTION_PREFIX:atlas_note_chunks}"
+  vcp:
+    daily-note-root: "${ATLAS_VCP_DAILYNOTE_ROOT:}"
+    default-target-notebook: "${ATLAS_VCP_DEFAULT_NOTEBOOK:Atlas知识库日记本}"
+    deepwiki-agent-notebook: "${ATLAS_VCP_DEEPWIKI_AGENT_NOTEBOOK:Atlas DeepWiki Agent 日记本}"
+    sync-agent-notebook: "${ATLAS_VCP_SYNC_AGENT_NOTEBOOK:Atlas VCP Sync Agent 日记本}"
+    public-memory-dsl: "${ATLAS_VCP_PUBLIC_MEMORY_DSL:}"
+    deepwiki-work-dsl: "${ATLAS_VCP_DEEPWIKI_WORK_DSL:}"
+    sync-work-dsl: "${ATLAS_VCP_SYNC_WORK_DSL:}"
+    user-scoped-root: ${ATLAS_VCP_USER_SCOPED_ROOT:false}

@@ -1,0 +1,100 @@
+@baseUrl = http://localhost:8080/api
+@username = atlas_demo
+@email = atlas_demo@example.com
+@password = atlas123456
+@token = 替换为登录或注册接口返回的 data.token
+@notebookId = 替换为创建笔记本接口返回的 data.id
+@noteId = 替换为创建笔记接口返回的 data.id
+
+### 1. 注册演示账号
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 2. 登录获取 JWT
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "account": "{{username}}",
+  "password": "{{password}}"
+}
+
+### 3. 创建笔记本
+POST {{baseUrl}}/notebooks
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "RAG 面试演示知识库",
+  "description": "用于演示 Atlas 的保存笔记、文本切片、向量检索、混合检索与 RAG 问答闭环"
+}
+
+### 4. 查看我的笔记本
+GET {{baseUrl}}/notebooks
+Authorization: Bearer {{token}}
+
+### 5. 写入第一条 RAG 示例笔记
+POST {{baseUrl}}/notes
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "notebookId": {{notebookId}},
+  "title": "Atlas RAG 系统设计",
+  "summary": "Atlas 采用 Spring Boot 实现知识库后端，保存笔记后异步切片并生成 embedding，支持语义检索、关键词检索、RRF 混合检索和 RAG 问答。",
+  "content": "# Atlas RAG 系统设计\n\nAtlas 是一个基于 Spring Boot 的智能知识库系统，核心目标是把个人 Markdown 笔记变成可检索、可问答的知识库。\n\n## 数据写入流程\n\n用户登录后可以创建笔记本并保存笔记。笔记保存成功后，后端会触发 EmbeddingPipeline 对正文进行重建索引：先删除旧 chunk，再用 TextChunker 按段落和句子切分文本，并保留一定 overlap，最后把 chunk 写入 note_chunk 表。\n\n## 向量化流程\n\n系统通过 EmbeddingClient 接口隔离具体向量模型。开发和演示阶段如果没有配置真实 embedding 模型，会使用 HashEmbeddingClient 生成本地 256 维向量，保证 MVP 可以离线跑通。生产环境可以切换到 OpenAI compatible embedding API。\n\n## 检索流程\n\n语义检索时，系统先把查询文本向量化，再在向量存储中搜索相似 chunk。MVP 默认关闭 Qdrant，直接使用 MySQL 中保存的向量并在 JVM 中计算 cosine similarity。混合检索会融合关键词检索和语义检索，并使用 RRF 算法合并排序。\n\n## 问答流程\n\nRAG 问答接口会先召回 topK 个相关片段，再把片段和用户问题组装成 prompt 交给 ChatClient。没有配置真实大模型时，系统会使用 LocalRagChatClient 生成本地兜底答案，保证面试演示时不依赖外部 API Key。"
+}
+
+### 6. 写入第二条后端工程示例笔记
+POST {{baseUrl}}/notes
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "notebookId": {{notebookId}},
+  "title": "Atlas 后端工程实现要点",
+  "summary": "系统后端使用 JWT 鉴权、MyBatis-Plus 数据访问、异步线程池执行 embedding 任务，并通过接口抽象降低模型服务和向量数据库耦合。",
+  "content": "# Atlas 后端工程实现要点\n\nAtlas 后端采用 Java 17 和 Spring Boot 构建，接口统一返回 ApiResponse 结构。认证模块使用 Spring Security 和 JWT，实现无状态登录鉴权。\n\n## 数据访问\n\n笔记本、笔记、标签、chunk 和 AI 模型配置都通过 MyBatis-Plus Mapper 访问 MySQL。笔记表支持逻辑删除，搜索接口可以按用户隔离数据。\n\n## 异步任务\n\nEmbedding 生成不是在保存笔记接口中同步完成，而是通过 @Async 交给 embeddingExecutor 线程池执行。这样保存接口可以快速返回，避免用户等待外部模型调用或批量切片耗时。\n\n## 可扩展设计\n\nEmbeddingClient、VectorStoreClient 和 ChatClient 都是接口，便于把本地兜底实现替换成真实模型服务或 Qdrant。这个设计让 MVP 演示和后续生产扩展都比较平滑。"
+}
+
+### 7. 查看笔记列表
+GET {{baseUrl}}/notes?notebookId={{notebookId}}
+Authorization: Bearer {{token}}
+
+### 8. 关键词检索
+GET {{baseUrl}}/notes/search?keyword=异步线程池&limit=10
+Authorization: Bearer {{token}}
+
+### 9. 语义检索
+GET {{baseUrl}}/search/semantic?query=系统如何做向量检索和离线兜底&topK=5
+Authorization: Bearer {{token}}
+
+### 10. 混合检索
+GET {{baseUrl}}/search/hybrid?query=RAG 问答 如何召回片段 生成答案&topK=5
+Authorization: Bearer {{token}}
+
+### 11. RAG 问答：系统整体设计
+POST {{baseUrl}}/chat/rag
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "question": "Atlas 这个 RAG 系统的核心流程是什么？",
+  "topK": 5
+}
+
+### 12. RAG 问答：后端工程亮点
+POST {{baseUrl}}/chat/rag
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "question": "这个项目有哪些适合后端开发岗位展示的工程亮点？",
+  "topK": 5
+}

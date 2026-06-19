@@ -1,0 +1,42 @@
+# Local secrets and machine-specific runtime configuration
+config.env
+**/config.env
+!config.env.example
+!**/config.env.example
+
+# Runtime data and build output
+.tools/
+.claude/
+atlas-backend/data/
+atlas-backend/target/
+atlas-frontend/node_modules/
+atlas-frontend/dist/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temp workspaces — paperreader retry/draft scraps not part of the project
+paperreader-*/
+workspace-*/
+tmp-*/
+temp-*/
+卷一*-*章/
+
+# Standalone HTML that is not part of Atlas
+ai-image-studio.html
+sunshine-installer.exe
+
+# Generated run scripts (user local)
+start-hidden.ps1
+start-hidden.vbs
+stop-hidden.vbs
+*hidden-run.cmd

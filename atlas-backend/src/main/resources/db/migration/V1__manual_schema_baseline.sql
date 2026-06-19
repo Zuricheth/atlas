@@ -1,0 +1,8 @@
+-- Atlas schema baseline.
+--
+-- The project historically used schema.sql for MySQL and schema-h2.sql for local H2.
+-- Keep V1 as a marker only. V2 creates the current schema for fresh databases.
+-- Existing manual MySQL databases should baseline at version 2 and start applying
+-- future schema changes from V3 onward.
+--
+-- New schema changes should be added as V3__*.sql and later migrations.

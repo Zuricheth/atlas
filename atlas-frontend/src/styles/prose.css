@@ -1,0 +1,217 @@
+/* ============================================================
+   .prose — 阅读内容排版系统
+   供所有 markdownToHtml 渲染输出使用(笔记阅读/AI回答/DeepWiki)
+   目标:像一本排版精美的电子书,长时间阅读不累
+   ============================================================ */
+
+.prose {
+  font-size: var(--fs-md);
+  line-height: 1.78;
+  color: var(--text);
+  max-width: 720px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  -webkit-text-size-adjust: 100%;
+}
+
+.prose > *:first-child { margin-top: 0; }
+.prose > *:last-child { margin-bottom: 0; }
+
+/* —— 段落 —— */
+.prose p {
+  margin: 0 0 1.1em;
+}
+
+/* —— 标题层级 —— */
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  position: relative;
+  margin: 1.8em 0 0.7em;
+  line-height: 1.35;
+  color: var(--text-strong);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.015em;
+}
+.prose h1 { font-size: 1.7em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border-soft); }
+.prose h2 { font-size: 1.42em; }
+.prose h3 { font-size: 1.22em; }
+.prose h4 { font-size: 1.06em; }
+.prose h5,
+.prose h6 { font-size: 0.95em; color: var(--muted); }
+
+/* h2 前留更多呼吸空间,首篇标题收紧 */
+.prose h2:first-child,
+.prose h1:first-child { margin-top: 0; }
+
+/* —— 强调 —— */
+.prose strong { font-weight: var(--fw-semibold); color: var(--text-strong); }
+.prose em { font-style: italic; }
+.prose del { color: var(--muted-soft); }
+
+/* —— 链接 —— */
+.prose a {
+  color: var(--primary);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(47, 93, 98, 0.25);
+  transition: color var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
+}
+.prose a:hover {
+  color: var(--primary-strong);
+  border-bottom-color: var(--primary);
+}
+
+/* —— 列表 —— */
+.prose ul,
+.prose ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.6em;
+}
+.prose li { margin: 0.3em 0; }
+.prose li::marker { color: var(--muted-soft); }
+.prose ul li::marker { color: var(--primary); }
+.prose li > ul,
+.prose li > ol { margin: 0.3em 0; }
+
+/* 任务列表 */
+.prose li[class*="task"],
+.prose li:has(input[type="checkbox"]) {
+  list-style: none;
+  margin-left: -1.4em;
+}
+
+/* —— 引用块 —— */
+.prose blockquote {
+  margin: 1.3em 0;
+  padding: 0.6em 1.1em;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: linear-gradient(90deg, var(--primary-soft) 0%, transparent 100%);
+  color: var(--text);
+}
+.prose blockquote p:last-child { margin-bottom: 0; }
+.prose blockquote strong { color: var(--primary-strong); }
+
+/* —— 行内代码 —— */
+.prose :not(pre) > code {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.86em;
+  padding: 0.15em 0.4em;
+  margin: 0 0.1em;
+  background: var(--panel-strong);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-xs);
+  color: var(--accent-clay);
+  word-break: break-word;
+}
+
+/* —— 代码块 —— */
+.prose pre {
+  margin: 1.3em 0;
+  padding: 16px 18px;
+  background: var(--code-bg, #1e2227);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  overflow-x: auto;
+  line-height: 1.6;
+  font-size: 0.88em;
+  box-shadow: var(--shadow-sm);
+}
+.prose pre code {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  color: #e6e1d8;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* —— 表格 —— */
+.prose table {
+  width: 100%;
+  margin: 1.3em 0;
+  border-collapse: collapse;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  font-size: 0.94em;
+}
+.prose th,
+.prose td {
+  padding: 10px 14px;
+  border: 1px solid var(--border-soft);
+  text-align: left;
+}
+.prose th {
+  background: var(--panel-strong);
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+}
+.prose tr:nth-child(even) td {
+  background: var(--panel-soft);
+}
+.prose tbody tr:hover td {
+  background: var(--primary-soft);
+}
+
+/* —— 分隔线 —— */
+.prose hr {
+  margin: 2em 0;
+  border: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+}
+
+/* —— 图片 —— */
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  margin: 1.2em 0;
+}
+
+/* —— 键盘按键 —— */
+.prose kbd {
+  font-family: inherit;
+  font-size: 0.82em;
+  padding: 0.15em 0.5em;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--r-xs);
+  box-shadow: var(--shadow-xs);
+  color: var(--text-strong);
+}
+
+/* —— 深色模式适配 —— */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .prose {
+    color: var(--text);
+  }
+  :root:not([data-theme="light"]) .prose pre {
+    background: var(--code-bg, #161b22);
+  }
+}
+
+/* —— KaTeX 数学公式融入 prose 排版 —— */
+.prose .katex { font-size: 1.05em; }
+.prose .katex-display {
+  margin: 1.2em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 0;
+}
+.prose .katex-display > .katex {
+  white-space: nowrap;
+  font-size: 1.15em;
+  display: inline-block;
+}
+.prose code.math-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px dashed var(--danger);
+}
